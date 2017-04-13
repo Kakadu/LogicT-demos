@@ -2,7 +2,7 @@
 -- In particular: Missionaries and cannibals problem
 
 {-
-  Copyright (c) 2005, Amr Sabry, Chung-chieh Shan, Oleg Kiselyov, 
+  Copyright (c) 2005, Amr Sabry, Chung-chieh Shan, Oleg Kiselyov,
 	and Daniel P. Friedman
 
   $Id: MCPT.hs,v 1.15 2005/09/12 22:40:09 oleg Exp $
@@ -11,7 +11,7 @@
 
 module MCPT where
 
-import Monad
+import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.Trans
 
@@ -19,8 +19,8 @@ import LogicT
 
 -- Choose one of the two following implementations of the LogicT monad
 
--- import SFKT		-- 2-CPS style
-import SRReifT		-- Direct-style, with shift/reset
+-- import SFKT       -- 2-CPS style
+import SRReifT    -- Direct-style, with shift/reset
 
 -- The following two are obsolete. FBackTrack performs much better
 -- import SVCT		-- Direct-style, with supervisor control
@@ -28,7 +28,7 @@ import SRReifT		-- Direct-style, with shift/reset
 
 
 -------------------------------------------------------------------------------
--- Given M missionaries, C cannibals, and B boats where each boat 
+-- Given M missionaries, C cannibals, and B boats where each boat
 --   holds at most two people
 -- Goal: move M+C from one side to the other
 -- Constraint: cannibals never outnumber missionaries in any place
@@ -48,8 +48,8 @@ final _ = mzero
 
 -- Moves
 
-data MoveDir = FWD | BWD		-- From left-to-right or vice versa
-	     deriving Show
+data MoveDir = FWD | BWD  -- From left-to-right or vice versa
+        deriving Show
 
 -- An action: a change in the State
 type Action = (Int,Int,MoveDir)
@@ -57,34 +57,34 @@ type Action = (Int,Int,MoveDir)
 -- Permissible actions: at most two people can move in a boat
 legalActions :: [Action]
 legalActions = (map (add_dir FWD) changes) ++ (map (add_dir BWD) changes)
-    where 
+  where
     changes = [(1,0),(0,1),(2,0),(0,2),(1,1)]
     add_dir dir (a,b) = (a,b,dir)
 
 -- The transmission function...
 -- Apply an action to a state. Fail if a bad state is reached
 move :: MonadPlus m => State -> Action -> m State
-move ((m1,c1,b1),(m2,c2,b2)) (mm,cm,FWD) | b1 > 0 = 
+move ((m1,c1,b1),(m2,c2,b2)) (mm,cm,FWD) | b1 > 0 =
   check ((m1-mm, c1-cm, b1-1),(m2+mm, c2+cm, b2+1))
-move ((m1,c1,b1),(m2,c2,b2)) (mm,cm,BWD) | b2 > 0 = 
+move ((m1,c1,b1),(m2,c2,b2)) (mm,cm,BWD) | b2 > 0 =
   check ((m1+mm, c1+cm, b1+1),(m2-mm, c2-cm, b2-1))
 move _ _ = mzero
 
 -- Check the newly reached state. Fail if it is bad
 check :: MonadPlus m => State -> m State
-check s@((m1,c1,b1),(m2,c2,b2)) = 
-    if and [m1 >= 0, m2 >= 0, c1 >= 0, c2 >= 0, 
-	    (m1 == 0 || c1 <= m1),	-- If there are missionaries, there
-					-- should be at least as many 
-	    (m2 == 0 || c2 <= m2)]	-- of them as there are cannibals
-       then return s
-       else mzero
+check s@((m1,c1,b1),(m2,c2,b2)) =
+    if and [m1 >= 0, m2 >= 0, c1 >= 0, c2 >= 0,
+      (m1 == 0 || c1 <= m1),  -- If there are missionaries, there
+                              -- should be at least as many
+      (m2 == 0 || c2 <= m2)]  -- of them as there are cannibals
+    then return s
+    else mzero
 
 
 -- non-deterministically, choose an element from a list
 -- Obviously, we fail if the list is empty.
 -- This function is obviously a manifestation of the Axiom of Choice
-choose:: MonadPlus m => [a] -> m a
+choose :: MonadPlus m => [a] -> m a
 choose = msum . map return
 
 occurs e lst = do { e' <- choose lst; if e == e' then return e else mzero }
@@ -92,29 +92,29 @@ occurs e lst = do { e' <- choose lst; if e == e' then return e else mzero }
 -- The first solution: Depth-first-search
 
 data SearchS = SearchS State     -- Current state
-	               [State]   -- Seen states; includes current
-		       [Action]  -- Actions that lead to the current state
+                       [State]   -- Seen states; includes current
+                       [Action]  -- Actions that lead to the current state
 
 instance Show SearchS where
-    show (SearchS _ _ actions) = show actions
+  show (SearchS _ _ actions) = show actions
 
-solve_dfs (SearchS current seen actions) = 
-    do 
+solve_dfs (SearchS current seen actions) =
+    do
     a     <- choose legalActions
     s     <- move current a
     liftIO $ putStrLn $ "Tentative move: " ++ (show current) ++ " -" ++
-	                (show a) ++ "-> " ++ (show s)
+                  (show a) ++ "-> " ++ (show s)
     let news = SearchS s (s:seen) (a:actions)
-    ifte (final s) 
-	 (const $ return news)
-	 (ifte (once (occurs s seen))
-	       (const $ mzero)
-	       (solve_dfs news))
+    ifte (final s)
+         (const $ return news)
+         (ifte (once (occurs s seen))
+               (const $ mzero)
+               (solve_dfs news))
 
 
-do'solve left = result >>= mapM_ print 
+do'solve left = result >>= mapM_ print
       where s = (left, (0,0,0))
-	    result = observe (bagofN Nothing $ solve_dfs (SearchS s [s] []))
+            result = observe (bagofN Nothing $ solve_dfs (SearchS s [s] []))
 
 {- Sample output. The last action is shown first.
 do'solve (3,3,1)
@@ -133,7 +133,7 @@ has no solutions.
 
 
 -------------------------------------------------------------------------------
---		Simple tests of LogicT monad operations
+--    Simple tests of LogicT monad operations
 
 -- Simple test of interleaving
 
@@ -159,27 +159,27 @@ test0 = runL (Just 5) to
 
 -- Starvation of t2
 test1 = runL (Just 10) (to `mplus` t2)
-test1' = runL (Just 1) ( 
-     do  x <- to `mplus` t2
-	 if even x then return x else mzero)
+test1' = runL (Just 1) (
+     do x <- to `mplus` t2
+        if even x then return x else mzero)
 
 
 -- No starvation
 test2 = runL (Just 10) (to `interleave` t2)
 
-test2' = runL (Just 1) ( (to `interleave` t2) >>= 
-			  (\x->if even x then return x else mzero))
+test2' = runL (Just 1) ( (to `interleave` t2) >>=
+          (\x->if even x then return x else mzero))
 
 test3 = runL Nothing (t2 `mplus` t2)
 test4 = runL Nothing (interleave t2 t2)
 
 -- The need for bindi
-test5 = let k n = to >>= (return . (n +)) in 
+test5 = let k n = to >>= (return . (n +)) in
         take 1 $ runList ((return 0) `mplus` (return 1)) >>= k >>=
-		        (\x ->if even x then return x else mzero)
-test5' = let k n = to >>= (return . (n +)) in 
+            (\x ->if even x then return x else mzero)
+test5' = let k n = to >>= (return . (n +)) in
          runL (Just 1) ( ((return 0) `mplus` (return 1)) `bindi` k >>=
-		          (\x ->if even x then return x else mzero) )
+            (\x ->if even x then return x else mzero) )
 
 -- Showing non-strict associativity of bindi
 
@@ -245,7 +245,7 @@ test_op' = runL (Just 10) (
 			       return d))
 		      (\_->mzero)
 		      (return n))
-			  
+
 -- Slowsort
 
 -- generate permutations
@@ -279,12 +279,12 @@ test_stream  = runL (Just 10) (stream_from 2)
 
 -- The test at the end of p7 of Spivey2006, in desugared notation
 test_sp1 = runL (Just 1) (
-            stream_from 2 >>= 
-	     (\a -> (stream_from 2 >>= 
-		     (\b -> if a*b == 9 then return (a,b) else mzero))))
+            stream_from 2 >>=
+              (\a -> (stream_from 2 >>=
+                (\b -> if a*b == 9 then return (a,b) else mzero))))
 -- diverges
 
 test_sp2 = runL (Just 1) (
-            stream_from 2 `bindi` 
+            stream_from 2 `bindi`
 	     (\a -> (stream_from 2 `bindi`
 		     (\b -> if a*b == 9 then return (a,b) else mzero))))

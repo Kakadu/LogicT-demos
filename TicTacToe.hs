@@ -24,8 +24,8 @@ import Data.List
 import SRReifT		-- Direct-style, with shift/reset
 
 
-n = 5				-- Dimension of the board
-m = 4				-- Number of consecutive marks needed for win
+n = 3				-- Dimension of the board
+m = 3				-- Number of consecutive marks needed for win
 
 -- ----------------------------------------------------------------------
 --			Representation of the board
@@ -53,7 +53,7 @@ move'loc'fn :: [(MoveFn,MoveFn)]
 move'loc'fn =
     [(\ (x,y) -> (x-1,y) ,  \ (x,y) -> (x+1,y)), -- up/down the column y
      (\ (x,y) -> (x,y-1) ,  \ (x,y) -> (x,y+1)), -- left/right the row x
-     (\ (x,y) -> (x-1,y-1), \ (x,y) -> (x+1,y+1)), 
+     (\ (x,y) -> (x-1,y-1), \ (x,y) -> (x+1,y+1)),
      (\ (x,y) -> (x-1,y+1), \ (x,y) -> (x+1,y-1))]
 
 good'loc (x,y) = x>=0 && y>=0 && x<n && y<n
@@ -65,34 +65,34 @@ extend'loc :: Board -> MoveFn -> Mark -> Loc -> (Int,Loc)
 extend'loc board mfn m loc = loop 0 loc (mfn loc)
     where loop n loc loc' | good'loc loc',
 	                    Just m' <- Map.lookup loc' board,
-			    m' == m 
+			    m' == m
 		      = loop (n+1) loc' (mfn loc')
 	  loop n loc _ = (n,loc)
 
 max'cluster :: Board -> Mark -> Loc -> (Int,Loc)
-max'cluster board m loc = maximumBy (\ (n1,_) (n2,_) -> compare n1 n2) $
-			            (map cluster'dir move'loc'fn)
-    where cluster'dir (mfn1,mfn2) = 
-	      let (n1,end1) = extend'loc board mfn1 m loc
-	          (n2,end2) = extend'loc board mfn2 m loc
-	      in (n1+n2+1,end1)
-
+max'cluster board m loc =
+  maximumBy (\ (n1,_) (n2,_) -> compare n1 n2) $
+              (map cluster'dir move'loc'fn)
+    where cluster'dir (mfn1,mfn2) =
+            let (n1,end1) = extend'loc board mfn1 m loc
+                (n2,end2) = extend'loc board mfn2 m loc
+            in (n1+n2+1,end1)
 
 -- The current position of the game then
 
 data Game = Game {
-		  -- The location and the mark of the
-		  -- player who first achieved the goal
-		  winner :: Maybe (Loc,Mark),
-		  -- The list of empty locations
-		  moves  :: [Loc],
-		  board  :: Board
-		  }
+      -- The location and the mark of the
+      -- player who first achieved the goal
+      winner :: Maybe (Loc,Mark),
+      -- The list of empty locations
+      moves  :: [Loc],
+      board  :: Board
+      }
 
 new'game :: Game
 new'game = Game { winner = Nothing,
-		  moves = map (\[x,y] ->(x,y)) $ sequence [[0..n-1],[0..n-1]],
-		  board = Map.empty}
+      moves = map (\[x,y] ->(x,y)) $ sequence [[0..n-1],[0..n-1]],
+      board = Map.empty}
 
 show'board fm = concatMap showrow [0..n-1]
     where showrow i = concatMap (showmark i) [0..n-1] ++ "\n"
@@ -102,7 +102,7 @@ show'board fm = concatMap showrow [0..n-1]
 -- Account for the move into location the 'loc' by the player 'p'
 
 take'move :: Mark -> Loc -> Game -> Game
-take'move p loc g = 
+take'move p loc g =
     Game { moves = delete loc (moves g),
 	   board = board',
 	   winner = let (n,l) = max'cluster board' p loc
@@ -136,7 +136,7 @@ game player1 player2
 human'player :: (MonadIO (t m), MonadTrans t) => PlayerProc t m
 human'player p g = do
     liftIO $ (putStrLn $ "Your (i,j) move as " ++ (show p))
-    let loop = liftIO getLine >>= 
+    let loop = liftIO getLine >>=
 	       \s -> case (reads s) of
 			[(l,"")] -> return l
 			_ -> (liftIO $ putStrLn "Parse Error") >> loop
@@ -186,7 +186,7 @@ other'player O = X
 
 -- the more the better
 estimate'state :: Mark -> Game -> Int
-estimate'state p g 
+estimate'state p g
     | Game{winner=Just (_,p')} <- g
         = if p == p' then score'win  else score'lose
     | Game{moves=[]} <- g
@@ -226,19 +226,19 @@ minmax :: (MonadPlus (t m), Monad m, LogicT t) =>
 minmax self dlim blim p g =
     do
     wbs <- bagofN (Just blim)
-	   (do
-            m   <- choose (moves g)
-            let g' = take'move p m g
-	    if dlim <= 0 then return (estimate'state p g',g')
-	       else do (w,_) <- self (dlim-1) blim 
-					(other'player p) g'
-		       return (-w,g'))
+      (do
+          m   <- choose (moves g)
+          let g' = take'move p m g
+          if dlim <= 0 then return (estimate'state p g',g')
+          else do
+                (w,_) <- self (dlim-1) blim (other'player p) g'
+                return (-w,g'))
     let (w,g') = maximumBy (\ (x,_) (y,_) -> compare x y) wbs
     return (w,g')
 
 ai' :: (MonadPlus (t m), Monad m, LogicT t) => PlayerProc t m
 ai' p g = ai'lim m 6 p g
-  where 
+  where
   ai'lim dlim blim p g
     | Game{winner=Just _} <- g
         = return (estimate'state p g,g)
@@ -261,17 +261,17 @@ a12a1, a12h, h2a1 :: IO ()
 a12a1 = observe $ game (X,ai') (O,ai')
 
 a12h = observe $ game (X,human'player) (O,ai')
-h2a1 = observe $ game (O,ai') (X,human'player) 
+h2a1 = observe $ game (O,ai') (X,human'player)
 
 {- Performance (median of 5 runs), GHC 6.10
 
 SFKT monad
-./TicTacToe +RTS -tstderr 
+./TicTacToe +RTS -tstderr
 <<ghc: 1064319528 bytes, 2031 GCs, 402911/807968 avg/max bytes residency (43 samples), 3M in use, 0.00 INIT (0.00 elapsed), 2.94 MUT (3.00 elapsed), 0.64 GC (0.65 elapsed) :ghc>>
         3.65 real         3.57 user         0.06 sys
 
 SRReifT with CC_FrameT
-./TicTacToe +RTS -tstderr 
+./TicTacToe +RTS -tstderr
 <<ghc: 3059137064 bytes, 5836 GCs, 399535/809024 avg/max bytes residency (33 samples), 3M in use, 0.00 INIT (0.00 elapsed), 7.19 MUT (7.39 elapsed), 0.89 GC (0.89 elapsed) :ghc>>
         8.28 real         8.07 user         0.14 sys
 
