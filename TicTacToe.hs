@@ -12,7 +12,7 @@
 -- To run this code
 -- GHCRTS="-tstderr" /usr/bin/time ./TicTacToe
 
-module Main where
+module TicTacToe where
 
 import Control.Monad
 import Control.Monad.Trans
